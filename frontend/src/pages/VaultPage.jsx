@@ -1,214 +1,157 @@
-// src/pages/VaultPage.jsx
 import React, { useState } from 'react';
-import { UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2, Database, ArrowRight } from 'lucide-react';
+import axios from 'axios';
 
 export default function VaultPage() {
-  const [isDragging, setIsDragging] = useState(false);
-  const [file, setFile] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [extractedData, setExtractedData] = useState(null);
-  const [isCommitted, setIsCommitted] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+  const [error, setError] = useState(null);
 
-  // Handle Drag & Drop events
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
+  const handleFileChange = (e) => {
+    setSelectedFile(e.target.files[0]);
+    setError(null);
+    setUploadResult(null);
   };
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setError('Please select a lab report image or PDF first.');
+      return;
+    }
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) startOcrSimulation(droppedFile);
-  };
+    setLoading(true);
+    setError(null);
 
-  const handleFileSelect = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) startOcrSimulation(selectedFile);
-  };
+    // Prepare FormData for file upload
+    const formData = new FormData();
+    formData.append('file', selectedFile);
 
-  // Simulate calling your Tesseract/FastAPI endpoint
-  const startOcrSimulation = (uploadedFile) => {
-    setFile(uploadedFile);
-    setIsProcessing(true);
-    setExtractedData(null);
-    setIsCommitted(false);
-
-    // Simulate a 2.5-second OCR extraction delay
-    setTimeout(() => {
-      setIsProcessing(false);
-      setExtractedData([
-        { metric: "Fasting Blood Glucose", value: "95", unit: "mg/dL", status: "Normal", confidence: "98.4%" },
-        { metric: "HbA1c (Glycated Hemoglobin)", value: "5.6", unit: "%", status: "Optimal", confidence: "99.1%" },
-        { metric: "Total Cholesterol", value: "178", unit: "mg/dL", status: "Normal", confidence: "97.8%" },
-        { metric: "Triglycerides", value: "112", unit: "mg/dL", status: "Normal", confidence: "96.5%" },
-        { metric: "Systolic BP (Extracted)", value: "118", unit: "mmHg", status: "Optimal", confidence: "95.2%" }
-      ]);
-    }, 2500);
-  };
-
-  const commitToMemory = () => {
-    setIsCommitted(true);
-    // This is where we will eventually trigger axios.post('/api/vault/save') to MongoDB
+    try {
+      // Send to FastAPI local backend
+      const response = await axios.post('http://localhost:8000/api/vault/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      setUploadResult(response.data);
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError(
+        err.response?.data?.detail || 'Failed to connect to backend server. Make sure FastAPI is running on port 8000!'
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 20px' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '28px', color: '#0f172a', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Database color="#2563eb" /> Medical Vault & OCR Ingestion
+    <div className="min-h-screen bg-slate-950 text-white p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold bg-gradient-to-r from-teal-400 to-blue-500 bg-clip-text text-transparent mb-2">
+          Medical Vault & OCR Parser
         </h1>
-        <p style={{ color: '#64748b', margin: 0 }}>
-          Upload lab reports, prescriptions, or blood panels. Our OCR pipeline automatically parses biological metrics to update your Digital Twin.
+        <p className="text-slate-400 mb-8">
+          Upload your clinical lab reports (PNG, JPG, PDF) to automatically extract biomarkers into your Biological Twin.
         </p>
-      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
-        
-        {/* LEFT COLUMN: Drag and Drop Zone */}
-        <div>
-          <div 
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            style={{
-              border: `2px dashed ${isDragging ? '#2563eb' : '#cbd5e1'}`,
-              backgroundColor: isDragging ? '#eff6ff' : '#ffffff',
-              borderRadius: '16px',
-              padding: '40px 20px',
-              textAlign: 'center',
-              transition: 'all 0.2s ease',
-              cursor: 'pointer',
-              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)'
-            }}
-            onClick={() => document.getElementById('fileInput').click()}
+        {/* Upload Box */}
+        <div className="border-2 border-dashed border-slate-700 rounded-xl p-8 text-center bg-slate-900/50 hover:border-teal-500 transition-colors mb-8">
+          <input
+            type="file"
+            accept=".png,.jpg,.jpeg,.pdf"
+            onChange={handleFileChange}
+            className="hidden"
+            id="file-upload"
+          />
+          <label
+            htmlFor="file-upload"
+            className="cursor-pointer flex flex-col items-center justify-center gap-3"
           >
-            <input 
-              type="file" 
-              id="fileInput" 
-              style={{ display: 'none' }} 
-              accept=".pdf,.png,.jpg,.jpeg"
-              onChange={handleFileSelect}
-            />
-            <UploadCloud size={48} color={isDragging ? '#2563eb' : '#64748b'} style={{ margin: '0 auto 16px' }} />
-            <h3 style={{ margin: '0 0 8px', color: '#1e293b', fontSize: '18px' }}>
-              Drag & Drop your Lab Report here
-            </h3>
-            <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 16px' }}>
-              Supports PDF, PNG, JPG (Max 10MB)
-            </p>
-            <button style={{
-              padding: '10px 20px',
-              backgroundColor: '#2563eb',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '8px',
-              fontWeight: '600',
-              cursor: 'pointer'
-            }}>
-              Browse Files
+            <div className="p-4 bg-slate-800 rounded-full text-teal-400">
+              📁
+            </div>
+            <span className="text-lg font-medium text-slate-200">
+              {selectedFile ? selectedFile.name : 'Click to browse or drop your lab report here'}
+            </span>
+            <span className="text-sm text-slate-500">Supports PNG, JPG, or PDF up to 10MB</span>
+          </label>
+
+          {selectedFile && (
+            <button
+              onClick={handleUpload}
+              disabled={loading}
+              className="mt-6 px-6 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 font-semibold rounded-lg shadow-lg shadow-teal-500/20 transition-all disabled:opacity-50"
+            >
+              {loading ? 'Running Tesseract OCR...' : 'Process Lab Report'}
             </button>
+          )}
+        </div>
+
+        {/* Error Alert */}
+        {error && (
+          <div className="p-4 bg-red-900/40 border border-red-500 text-red-300 rounded-lg mb-8">
+            ⚠️ {error}
           </div>
+        )}
 
-          {/* Selected File Status */}
-          {file && (
-            <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <FileText color="#2563eb" size={24} />
-              <div style={{ flex: 1, overflow: 'hidden' }}>
-                <p style={{ margin: 0, fontWeight: '600', color: '#1e293b', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                  {file.name}
-                </p>
-                <span style={{ fontSize: '12px', color: '#64748b' }}>
-                  {(file.size / 1024 / 1024).toFixed(2)} MB • Ready for OCR
-                </span>
+        {/* Extracted Results Display */}
+        {uploadResult && (
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl animate-fade-in">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
+              <div>
+                <h2 className="text-xl font-semibold text-teal-400">Extracted Biomarker Analysis</h2>
+                <p className="text-xs text-slate-500">File: {uploadResult.filename} ({uploadResult.file_size_mb} MB)</p>
+              </div>
+              <span className="px-3 py-1 bg-teal-500/10 text-teal-400 border border-teal-500/30 rounded-full text-xs font-medium">
+                {uploadResult.status}
+              </span>
+            </div>
+
+            {/* OCR Raw Text Snippet */}
+            <div className="mb-6">
+              <h3 className="text-sm font-semibold text-slate-400 mb-2">Raw OCR Text Sample:</h3>
+              <div className="p-3 bg-slate-950 rounded border border-slate-800/80 text-xs text-slate-400 font-mono italic">
+                "{uploadResult.extracted_text_snippet}"
               </div>
             </div>
-          )}
-        </div>
 
-        {/* RIGHT COLUMN: OCR Extraction Results View */}
-        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          
-          {/* State 1: Nothing uploaded yet */}
-          {!file && !isProcessing && (
-            <div style={{ textAlign: 'center', color: '#94a3b8', padding: '40px 0' }}>
-              <AlertCircle size={40} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-              <p style={{ margin: 0, fontWeight: '500' }}>No document selected</p>
-              <span style={{ fontSize: '13px' }}>Upload a report on the left to view extracted AI insights.</span>
+            {/* Biomarker Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 text-sm">
+                    <th className="pb-3">Biomarker Metric</th>
+                    <th className="pb-3">Value</th>
+                    <th className="pb-3">Unit</th>
+                    <th className="pb-3">Status</th>
+                    <th className="pb-3">Confidence</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 text-sm">
+                  {uploadResult.biomarkers.map((item, index) => (
+                    <tr key={index} className="hover:bg-slate-800/30">
+                      <td className="py-3 font-medium text-slate-200">{item.metric}</td>
+                      <td className="py-3 font-bold text-white">{item.value}</td>
+                      <td className="py-3 text-slate-400">{item.unit}</td>
+                      <td className="py-3">
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            item.status === 'Optimal'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          }`}
+                        >
+                          {item.status}
+                        </span>
+                      </td>
+                      <td className="py-3 text-slate-500">{item.confidence}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
-
-          {/* State 2: Processing OCR Simulation */}
-          {isProcessing && (
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <Loader2 size={40} color="#2563eb" style={{ margin: '0 auto 16px', animation: 'spin 1s linear infinite' }} />
-              <h4 style={{ margin: '0 0 8px', color: '#1e293b' }}>Analyzing Medical Document...</h4>
-              <p style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>
-                Running Tesseract OCR & NLP Entity Recognition
-              </p>
-            </div>
-          )}
-
-          {/* State 3: Extracted Data Display */}
-          {extractedData && !isProcessing && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #e2e8f0' }}>
-                <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>Extracted Biomarkers (NLP)</h3>
-                <span style={{ fontSize: '12px', backgroundColor: '#dcfce7', color: '#16a34a', padding: '4px 8px', borderRadius: '12px', fontWeight: '600' }}>
-                  ● OCR High Confidence
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px', maxHeight: '280px', overflowY: 'auto' }}>
-                {extractedData.map((item, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                    <div>
-                      <span style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#334155' }}>{item.metric}</span>
-                      <span style={{ fontSize: '11px', color: '#64748b' }}>Confidence: {item.confidence}</span>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>{item.value}</span>{' '}
-                      <span style={{ fontSize: '12px', color: '#64748b' }}>{item.unit}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Commit Button */}
-              {!isCommitted ? (
-                <button 
-                  onClick={commitToMemory}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    backgroundColor: '#16a34a',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px'
-                  }}
-                >
-                  Commit to Twin Memory <ArrowRight size={18} />
-                </button>
-              ) : (
-                <div style={{ padding: '12px', backgroundColor: '#dcfce7', color: '#16a34a', borderRadius: '8px', textAlign: 'center', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <CheckCircle2 size={20} /> Successfully Saved to Digital Replica!
-                </div>
-              )}
-            </div>
-          )}
-
-        </div>
-
+          </div>
+        )}
       </div>
     </div>
   );
