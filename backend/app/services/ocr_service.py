@@ -3,17 +3,37 @@ import pytesseract
 from PIL import Image
 import io
 import os
+import sys
+from .image_validation_service import validate_lab_scan
 
-# Point directly to the standard Windows installation path
-tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-if os.path.exists(tesseract_cmd):
-    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+# Automatically detect the OS and set the correct Tesseract path
+if sys.platform == 'win32':
+    # Windows path (For Neha)
+    current_tesseract_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+elif sys.platform == 'darwin':
+    # macOS path (For Kriyentika)
+    current_tesseract_path = '/opt/homebrew/bin/tesseract'
+else:
+    # Fallback for Linux servers
+    current_tesseract_path = 'tesseract'
+
+# Assign the detected path to the library
+pytesseract.pytesseract.tesseract_cmd = current_tesseract_path
 
 def extract_text_from_image(image_bytes: bytes) -> str:
     """Runs Tesseract OCR on raw image bytes. Throws an error if reading fails."""
-    if not os.path.exists(tesseract_cmd):
-        raise RuntimeError("Tesseract OCR is not installed or not found at C:\\Program Files\\Tesseract-OCR\\tesseract.exe")
+    
+    # --- KRIYENTIKA'S VISION LAYER INTERCEPT ---
+    validation = validate_lab_scan(image_bytes)
+    if not validation["is_valid"]:
+        raise ValueError(validation["error_message"])
+    # -------------------------------------------
+    
+    # Dynamically check if the engine exists at the OS-specific path
+    if current_tesseract_path != 'tesseract' and not os.path.exists(current_tesseract_path):
+        raise RuntimeError(f"Tesseract OCR is not installed or not found at {current_tesseract_path}")
         
+    # ... rest of Himanshu's code remains the same ...   
     try:
         image = Image.open(io.BytesIO(image_bytes))
         text = pytesseract.image_to_string(image)
