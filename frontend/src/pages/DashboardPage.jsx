@@ -1,5 +1,6 @@
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import LabScanUpload from '../components/LabScanUpload';
 
 // Mock historical data for the trend graph
 const historicalData = [
