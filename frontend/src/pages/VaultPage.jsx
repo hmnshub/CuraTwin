@@ -1,16 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
+import { AuthContext } from '../context/AuthContext'; // Import your token!
 
 export default function VaultPage() {
+  const { token } = useContext(AuthContext); // Get the auth token
+
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [uploadResult, setUploadResult] = useState(null);
+  const [reports, setReports] = useState([]); // Changed to an array to hold history
   const [error, setError] = useState(null);
+
+  // 1. Fetch historical reports when the page loads
+  useEffect(() => {
+    const fetchVaultHistory = async () => {
+      try {
+        const response = await axios.get('http://localhost:8000/api/vault/history', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        // Assuming your backend returns { "reports": [...] }
+        setReports(response.data.reports || []);
+      } catch (err) {
+        console.error('Failed to fetch past reports:', err);
+        // We don't set a blocking error here so the user can still try to upload
+      }
+    };
+
+    if (token) {
+      fetchVaultHistory();
+    }
+  }, [token]);
 
   const handleFileChange = (e) => {
     setSelectedFile(e.target.files[0]);
     setError(null);
-    setUploadResult(null);
   };
 
   const handleUpload = async () => {
@@ -22,18 +46,24 @@ export default function VaultPage() {
     setLoading(true);
     setError(null);
 
-    // Prepare FormData for file upload
     const formData = new FormData();
     formData.append('file', selectedFile);
 
     try {
-      // Send to FastAPI local backend
+      // 2. Added the Authorization header so the backend allows the upload
       const response = await axios.post('http://localhost:8000/api/vault/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}` 
         },
       });
-      setUploadResult(response.data);
+      
+      // Prepend the brand new report to the top of the history list
+      setReports((prevReports) => [response.data, ...prevReports]);
+      
+      // Clear the file input
+      setSelectedFile(null);
+      
     } catch (err) {
       console.error('Upload error:', err);
       setError(
@@ -94,62 +124,76 @@ export default function VaultPage() {
           </div>
         )}
 
-        {/* Extracted Results Display */}
-        {uploadResult && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl animate-fade-in">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
-              <div>
-                <h2 className="text-xl font-semibold text-teal-400">Extracted Biomarker Analysis</h2>
-                <p className="text-xs text-slate-500">File: {uploadResult.filename} ({uploadResult.file_size_mb} MB)</p>
-              </div>
-              <span className="px-3 py-1 bg-teal-500/10 text-teal-400 border border-teal-500/30 rounded-full text-xs font-medium">
-                {uploadResult.status}
-              </span>
-            </div>
+        {/* Dynamic Extracted Results Display (History Loop) */}
+        {reports.length > 0 && (
+          <div className="space-y-8">
+            <h2 className="text-xl font-bold text-slate-300 border-b border-slate-800 pb-2">Your Extracted Records</h2>
+            
+            {reports.map((report, index) => (
+              <div key={index} className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl animate-fade-in">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
+                  <div>
+                    <h2 className="text-xl font-semibold text-teal-400">Extracted Biomarker Analysis</h2>
+                    <p className="text-xs text-slate-500">File: {report.filename} {report.file_size_mb && `(${report.file_size_mb} MB)`}</p>
+                  </div>
+                  <span className={`px-3 py-1 text-xs font-medium rounded-full border ${
+                    report.status === 'Success - Verified Lab Report' 
+                      ? 'bg-teal-500/10 text-teal-400 border-teal-500/30' 
+                      : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                  }`}>
+                    {report.status || "Processed"}
+                  </span>
+                </div>
 
-            {/* OCR Raw Text Snippet */}
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold text-slate-400 mb-2">Raw OCR Text Sample:</h3>
-              <div className="p-3 bg-slate-950 rounded border border-slate-800/80 text-xs text-slate-400 font-mono italic">
-                "{uploadResult.extracted_text_snippet}"
-              </div>
-            </div>
+                {/* OCR Raw Text Snippet */}
+                {report.extracted_text_snippet && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-slate-400 mb-2">Raw OCR Text Sample:</h3>
+                    <div className="p-3 bg-slate-950 rounded border border-slate-800/80 text-xs text-slate-400 font-mono italic">
+                      "{report.extracted_text_snippet}"
+                    </div>
+                  </div>
+                )}
 
-            {/* Biomarker Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 text-sm">
-                    <th className="pb-3">Biomarker Metric</th>
-                    <th className="pb-3">Value</th>
-                    <th className="pb-3">Unit</th>
-                    <th className="pb-3">Status</th>
-                    <th className="pb-3">Confidence</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 text-sm">
-                  {uploadResult.biomarkers.map((item, index) => (
-                    <tr key={index} className="hover:bg-slate-800/30">
-                      <td className="py-3 font-medium text-slate-200">{item.metric}</td>
-                      <td className="py-3 font-bold text-white">{item.value}</td>
-                      <td className="py-3 text-slate-400">{item.unit}</td>
-                      <td className="py-3">
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            item.status === 'Optimal'
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                          }`}
-                        >
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="py-3 text-slate-500">{item.confidence}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                {/* Biomarker Table */}
+                {report.biomarkers && report.biomarkers.length > 0 && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400 text-sm">
+                          <th className="pb-3">Biomarker Metric</th>
+                          <th className="pb-3">Value</th>
+                          <th className="pb-3">Unit</th>
+                          <th className="pb-3">Status</th>
+                          <th className="pb-3">Confidence</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 text-sm">
+                        {report.biomarkers.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-slate-800/30">
+                            <td className="py-3 font-medium text-slate-200">{item.metric}</td>
+                            <td className="py-3 font-bold text-white">{item.value}</td>
+                            <td className="py-3 text-slate-400">{item.unit}</td>
+                            <td className="py-3">
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-medium ${
+                                  item.status === 'Optimal'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                }`}
+                              >
+                                {item.status}
+                              </span>
+                            </td>
+                            <td className="py-3 text-slate-500">{item.confidence}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
