@@ -1,35 +1,39 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
-import { AuthContext } from '../context/AuthContext'; // Import your token!
+import { AuthContext } from '../context/AuthContext';
 
 export default function VaultPage() {
-  const { token } = useContext(AuthContext); // Get the auth token
+  const { token: contextToken } = useContext(AuthContext); 
+
+  // BULLETPROOF TOKEN FALLBACK: Checks context first, then browser storage
+  const token = contextToken || localStorage.getItem('token') || localStorage.getItem('accessToken') || localStorage.getItem('access_token');
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [reports, setReports] = useState([]); // Changed to an array to hold history
+  const [reports, setReports] = useState([]); 
   const [error, setError] = useState(null);
 
   // 1. Fetch historical reports when the page loads
   useEffect(() => {
     const fetchVaultHistory = async () => {
+      if (!token) {
+        console.warn("⚠️ No auth token found. Please log in.");
+        return;
+      }
+
       try {
         const response = await axios.get('http://localhost:8000/api/vault/history', {
           headers: {
             Authorization: `Bearer ${token}`
           }
         });
-        // Assuming your backend returns { "reports": [...] }
         setReports(response.data.reports || []);
       } catch (err) {
         console.error('Failed to fetch past reports:', err);
-        // We don't set a blocking error here so the user can still try to upload
       }
     };
 
-    if (token) {
-      fetchVaultHistory();
-    }
+    fetchVaultHistory();
   }, [token]);
 
   const handleFileChange = (e) => {
@@ -38,6 +42,11 @@ export default function VaultPage() {
   };
 
   const handleUpload = async () => {
+    if (!token) {
+      setError('Authentication token missing. Please log out and log back in.');
+      return;
+    }
+
     if (!selectedFile) {
       setError('Please select a lab report image or PDF first.');
       return;
@@ -50,7 +59,6 @@ export default function VaultPage() {
     formData.append('file', selectedFile);
 
     try {
-      // 2. Added the Authorization header so the backend allows the upload
       const response = await axios.post('http://localhost:8000/api/vault/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -58,10 +66,7 @@ export default function VaultPage() {
         },
       });
       
-      // Prepend the brand new report to the top of the history list
       setReports((prevReports) => [response.data, ...prevReports]);
-      
-      // Clear the file input
       setSelectedFile(null);
       
     } catch (err) {

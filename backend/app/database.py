@@ -1,7 +1,9 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
 from dotenv import load_dotenv
+from app.models.db_models import ChatHistory, User, LabReport
 import os
+
 
 # Import BOTH models now
 from app.models.db_models import ChatHistory, User
@@ -20,6 +22,6 @@ async def init_db():
     database = client.curatwin_db
     
     # 3. Initialize Beanie models (Notice User is added here!)
-    await init_beanie(database, document_models=[ChatHistory, User])
+    await init_beanie(database, document_models=[ChatHistory, User, LabReport])
     
     print("Successfully connected to MongoDB Atlas and initialized Beanie models!")
