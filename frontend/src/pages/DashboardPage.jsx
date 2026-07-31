@@ -6,20 +6,30 @@ import { AuthContext } from '../context/AuthContext';
 import LabScanUpload from '../components/LabScanUpload';
 
 export default function DashboardPage() {
-  const { token } = useContext(AuthContext);
+  const { token: contextToken } = useContext(AuthContext);
 
-  // 1. Your Dynamic Backend State
+  // 1. BULLETPROOF TOKEN FALLBACK
+  const token = contextToken || localStorage.getItem('token') || localStorage.getItem('accessToken') || localStorage.getItem('access_token');
+
+  // Your Dynamic Backend State
   const [healthIndex, setHealthIndex] = useState(0);
   const [lipidRisk, setLipidRisk] = useState("Analyzing...");
   const [riskAdvice, setRiskAdvice] = useState("Connecting to neural network...");
   const [historicalData, setHistoricalData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 2. Your API Fetching Logic (Replaces her mock POST request)
+  // 2. Fetch Dashboard Data
   useEffect(() => {
     const fetchDashboardData = async () => {
+      if (!token) {
+        console.warn("No token found on Dashboard.");
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const response = await axios.get('http://127.0.0.1:8000/api/vault/summary', {
+        // FIXED: Changed 127.0.0.1 to localhost to match the Vault perfectly
+        const response = await axios.get('http://localhost:8000/api/vault/summary', {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -38,14 +48,10 @@ export default function DashboardPage() {
       }
     };
 
-    if (token) {
-      fetchDashboardData();
-    } else {
-      setIsLoading(false);
-    }
+    fetchDashboardData();
   }, [token]);
 
-  // 3. Her Dynamic UI Helper Functions
+  // 3. Dynamic UI Helper Functions
   const getRiskUI = (risk, loading) => {
     if (loading) return { cardBg: 'bg-white/40 border-slate-100/50 backdrop-blur-sm', badgeColor: 'bg-slate-100/80', badgeText: 'text-slate-500', label: 'Processing...', icon: Loader2, mainTextColor: 'text-slate-800' };
     
@@ -77,7 +83,7 @@ export default function DashboardPage() {
   const indexUI = getIndexUI(healthIndex);
   const IndexIcon = indexUI.icon;
 
-  // 4. Render Her New UI layout using Your API Data
+  // 4. Render UI layout
   return (
     <div className="min-h-screen bg-slate-50/50 p-6 md:p-10 font-sans">
       <div className="max-w-7xl mx-auto space-y-8">

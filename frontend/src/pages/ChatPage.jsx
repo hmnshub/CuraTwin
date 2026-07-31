@@ -1,16 +1,22 @@
-// src/pages/ChatPage.jsx
-import React, { useState } from 'react';
-import { Send, Bot, User, Sparkles, FileText, Cpu, ShieldCheck, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect, useContext } from 'react';
+import axios from 'axios';
+import { Send, Bot, User, Sparkles, FileText, Cpu, ShieldCheck } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext'; // Import your token context!
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState([
-    {
-      sender: 'ai',
-      text: "Hello Alex! I am your CuraTwin digital replica. I've analyzed your biological baseline and your uploaded lab reports up to July 2026. How can I assist with your health insights today?",
-      citations: ["Baseline Profile", "Lab Report - July 2026"],
-      modelUsed: "CuraTwin-Fast (Llama-3-8B)"
-    }
-  ]);
+  const { token: contextToken } = useContext(AuthContext);
+  
+  // BULLETPROOF TOKEN FALLBACK
+  const token = contextToken || localStorage.getItem('token') || localStorage.getItem('accessToken') || localStorage.getItem('access_token');
+
+  const defaultGreeting = {
+    sender: 'ai',
+    text: "Hello! I am your CuraTwin digital replica. I've analyzed your biological baseline and your uploaded lab reports up to July 2026. How can I assist with your health insights today?",
+    citations: ["Baseline Profile", "Lab Report - July 2026"],
+    modelUsed: "CuraTwin-Fast (Llama-3-8B)"
+  };
+
+  const [messages, setMessages] = useState([defaultGreeting]);
   const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] = useState('fast');
   const [isTyping, setIsTyping] = useState(false);
@@ -21,39 +27,82 @@ export default function ChatPage() {
     "📈 Compare my blood pressure between March and July"
   ];
 
-  const handleSend = (textToSend) => {
+  // 1. Fetch Chat History on Page Load
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (!token) return;
+      try {
+        const res = await axios.get('http://localhost:8000/api/chat/history', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const dbHistory = res.data.history || [];
+        
+        if (dbHistory.length > 0) {
+          const formattedMessages = [defaultGreeting]; // Keep the greeting at the top
+          
+          // Map MongoDB entries to your UI format
+          dbHistory.forEach(chat => {
+            formattedMessages.push({ sender: 'user', text: chat.user_message });
+            formattedMessages.push({
+              sender: 'ai',
+              text: chat.ai_response,
+              citations: ["Historical Context", "Medical Vault"], 
+              modelUsed: "CuraTwin-Fast (Llama-3-8B)"
+            });
+          });
+          
+          setMessages(formattedMessages);
+        }
+      } catch (error) {
+        console.error("Failed to fetch chat history:", error);
+      }
+    };
+    
+    fetchHistory();
+  }, [token]);
+
+  // 2. Send Message to FastAPI Backend
+  const handleSend = async (textToSend) => {
     const query = textToSend || input;
     if (!query.trim()) return;
 
-    // Add User Message
+    // Add User Message to UI instantly
     const userMsg = { sender: 'user', text: query };
     setMessages((prev) => [...prev, userMsg]);
     if (!textToSend) setInput('');
     setIsTyping(true);
 
-    // Simulate RAG AI Reasoning & Vector Search Delay
-    setTimeout(() => {
-      let replyText = "Based on your latest lipid panel and fasting glucose of 95 mg/dL, your metabolic markers are stabilizing well within optimal ranges. However, I recommend monitoring your sodium intake to support your systolic BP trend.";
-      let citations = ["Lab Report - July 2026", "Tesseract OCR Biomarker Vault"];
-      
-      if (query.includes("prescriptions") || query.includes("💊")) {
-        replyText = "You are currently listed on Lisinopril 5mg daily for mild blood pressure management. No negative drug interactions were detected with your reported allergy to Penicillin.";
-        citations = ["Clinical Onboarding Context", "Rx Database"];
-      } else if (query.includes("diet") || query.includes("🥗")) {
-        replyText = "To maintain your HbA1c at optimal levels (currently 5.6%), focus on high-fiber complex carbohydrates and lean proteins. Reducing refined sugars will help sustain your downward blood glucose trend from February (118 mg/dL) to July (95 mg/dL).";
-        citations = ["Metabolic Panel - Feb to Jul 2026", "Nutritional RAG Knowledgebase"];
-      }
+    try {
+      // Hit your real python backend!
+      const res = await axios.post('http://localhost:8000/api/chat/', {
+        session_id: "default-session",
+        user_message: query,
+        patient_context: "Use latest Medical Vault lab reports for clinical context." 
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
+      // Format AI reply and add to UI
       const aiMsg = {
         sender: 'ai',
-        text: replyText,
-        citations: citations,
+        text: res.data.reply,
+        citations: ["Live Vault Query", "Biomarker Database"], 
         modelUsed: selectedModel === 'fast' ? "CuraTwin-Fast (Llama-3-8B)" : "CuraTwin-Clinical (BioMistral-70B)"
       };
 
       setMessages((prev) => [...prev, aiMsg]);
+    } catch (error) {
+      console.error("Chat error:", error);
+      // Fail gracefully so the UI doesn't crash
+      setMessages((prev) => [...prev, { 
+        sender: 'ai', 
+        text: "Error connecting to the neural core. Please check your backend connection.",
+        modelUsed: "System Alert"
+      }]);
+    } finally {
       setIsTyping(false);
-    }, 1800);
+    }
   };
 
   return (
@@ -96,7 +145,7 @@ export default function ChatPage() {
             <div style={{ backgroundColor: msg.sender === 'user' ? '#2563eb' : '#ffffff', color: msg.sender === 'user' ? '#ffffff' : '#1e293b', padding: '16px', borderRadius: '16px', border: msg.sender === 'user' ? 'none' : '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
               
               {/* AI Model Metadata */}
-              {msg.sender === 'ai' && (
+              {msg.sender === 'ai' && msg.modelUsed !== "System Alert" && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748b', marginBottom: '8px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   <ShieldCheck size={14} color="#10b981" /> Grounded Response • {msg.modelUsed}
                 </div>
