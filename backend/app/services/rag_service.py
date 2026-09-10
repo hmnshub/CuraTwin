@@ -64,7 +64,7 @@ USER QUESTION:
             response = await client.post(
                 "http://localhost:11434/api/generate",
                 json={
-                    "model": "llama3",
+                    "model": "qwen2.5-coder:7b",
                     "prompt": system_prompt,
                     "stream": False
                 },
