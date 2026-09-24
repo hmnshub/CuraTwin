@@ -37,9 +37,16 @@ async def generate_ai_response(
         context_to_use = "No medical lab reports found in the database for this user."
 
     # 2. Fetch or initialize chat history in MongoDB
-    chat_session = await ChatHistory.find_one(ChatHistory.session_id == session_id)
+    chat_session = await ChatHistory.find_one(
+        ChatHistory.user_email == user_email,
+        ChatHistory.session_id == session_id,
+    )
     if not chat_session:
-        chat_session = ChatHistory(session_id=session_id, messages=[])
+        chat_session = ChatHistory(
+            user_email=user_email,
+            session_id=session_id,
+            messages=[],
+        )
 
     # 3. Append user message to database history
     chat_session.messages.append(Message(role="user", content=user_message))

@@ -68,8 +68,23 @@ async def chat_with_ai(
 @router.get("/history")
 async def get_chat_history(email: str = Depends(get_current_user_email)):
     try:
-        # Queries chat sessions matching the authenticated user's email
-        history = await ChatHistory.find(ChatHistory.user_email == email).to_list()
+        # Messages are embedded in ChatHistory; there are no top-level
+        # user_message/ai_response/timestamp fields to query or return.
+        sessions = await ChatHistory.find(
+            ChatHistory.user_email == email
+        ).sort(ChatHistory.created_at).to_list()
+
+        # Return one consistent shape to the UI, regardless of how many
+        # sessions the user has created.
+        history = [
+            {
+                "session_id": session.session_id,
+                **message.model_dump(mode="json"),
+            }
+            for session in sessions
+            for message in session.messages
+        ]
+        history.sort(key=lambda message: message["timestamp"])
         return {"history": history}
     except Exception as e:
         print(f"❌ History Fetch Error: {str(e)}")

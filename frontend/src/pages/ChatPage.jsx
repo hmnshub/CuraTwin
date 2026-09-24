@@ -41,14 +41,16 @@ export default function ChatPage() {
         if (dbHistory.length > 0) {
           const formattedMessages = [defaultGreeting]; // Keep the greeting at the top
           
-          // Map MongoDB entries to your UI format
-          dbHistory.forEach(chat => {
-            formattedMessages.push({ sender: 'user', text: chat.user_message });
+          // ChatHistory stores embedded messages as { role, content }.
+          // Do not read the old, non-existent user_message/ai_response fields.
+          dbHistory.forEach(message => {
             formattedMessages.push({
-              sender: 'ai',
-              text: chat.ai_response,
-              citations: ["Historical Context", "Medical Vault"], 
-              modelUsed: "CuraTwin-Fast (Llama-3-8B)"
+              sender: message.role === 'user' ? 'user' : 'ai',
+              text: message.content,
+              ...(message.role === 'assistant' ? {
+                citations: ["Historical Context", "Medical Vault"],
+                modelUsed: "CuraTwin-Fast (Llama-3-8B)"
+              } : {})
             });
           });
           

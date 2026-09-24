@@ -10,8 +10,12 @@ class Message(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
 
 class ChatHistory(Document):
+    # Chat histories belong to a user as well as to a browser/session.  Keeping
+    # the owner on the document prevents users with the same session id from
+    # seeing one another's conversations.
+    user_email: str
     session_id: str
-    messages: List[Message] = []
+    messages: List[Message] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
 
     class Settings:
